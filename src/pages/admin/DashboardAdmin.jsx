@@ -90,12 +90,13 @@ export default function DashboardAdmin() {
       }
     } catch (error) { alert("Error de conexión"); }
   };
-  // Función inteligente: Crea o Actualiza dependiendo del estado
+
+  // Función inteligente: Usa la nueva ruta para el registro y la anterior para editar
   const handleGuardarPersonal = async (e) => {
     e.preventDefault();
     const url = isEditandoMedico
       ? `http://localhost:8080/api/admin/personal/${idMedicoEditar}`
-      : 'http://localhost:8080/api/admin/personal';
+      : 'http://localhost:8080/api/medico/registrar'; // Ruta corregida hacia tu MedicoController
     const method = isEditandoMedico ? 'PUT' : 'POST';
 
     try {
@@ -112,7 +113,7 @@ export default function DashboardAdmin() {
       } else {
         alert(`Error al ${isEditandoMedico ? 'actualizar' : 'registrar'} personal.`);
       }
-    } catch (error) { alert("Error de conexión"); }
+    } catch (error) { alert("Error de conexión con el backend"); }
   };
 
   // --- HANDLERS DE EDICIÓN Y ELIMINACIÓN ---
@@ -136,17 +137,17 @@ export default function DashboardAdmin() {
     setIsEditandoMedico(true);
     setIdMedicoEditar(medico.id_personal_salud || medico.ID_PERSONAL_SALUD);
 
-    // Llenamos el formulario con los datos actuales del médico
     setNuevoMedico({
       medico: medico.nombre || medico.NOMBRE || '',
       especialidad: medico.especialidad || medico.ESPECIALIDAD || 'Medicina General',
       consultorio: '',
       correo: medico.correo || '',
-      password: '' // Se deja en blanco por seguridad
+      password: '' 
     });
 
     setIsModalPersonalOpen(true);
   };
+
   const handleEliminarPaciente = async (id) => {
     if (!window.confirm("¿Estás seguro de eliminar a este paciente? Se borrarán también sus citas asociadas.")) return;
     try {
@@ -287,7 +288,7 @@ export default function DashboardAdmin() {
           <thead>
             <tr className="bg-white text-xs uppercase tracking-wider text-gray-500 border-b border-gray-200">
               <th className="px-6 py-4 font-bold">ID</th>
-              <th className="px-6 py-4 font-bold">Médicoooooo</th>
+              <th className="px-6 py-4 font-bold">Médico</th>
               <th className="px-6 py-4 font-bold">Especialidad</th>
               <th className="px-6 py-4 font-bold text-right">Acciones</th>
             </tr>
@@ -502,7 +503,7 @@ export default function DashboardAdmin() {
                     </label>
                     <input
                       type="text"
-                      required={!isEditandoMedico} // No obligar a cambiar clave si solo está editando nombre
+                      required={!isEditandoMedico}
                       placeholder={isEditandoMedico ? 'Dejar en blanco para no cambiar' : 'Asigna una clave'}
                       className="w-full border border-gray-300 rounded-lg p-2.5 outline-none focus:border-yellow-500 bg-yellow-50 text-xs"
                       value={nuevoMedico.password}

@@ -5,7 +5,7 @@ export default function MisCitas() {
   const navigate = useNavigate();
   const [vistaActual, setVistaActual] = useState('citas');
   
-  // ESTADO DEL USUARIOOOOOOOOOO
+  // ESTADO DEL USUARIO
   const [usuario, setUsuario] = useState({
     idPaciente: null,
     nombre: '',
@@ -17,6 +17,15 @@ export default function MisCitas() {
 
   // ESTADO DE CITAS
   const [citas, setCitas] = useState([]);
+
+  // ESTADOS NUEVOS PARA CARGAR MÉDICOS DINÁMICAMENTE
+  const [medicosFiltrados, setMedicosFiltrados] = useState([]);
+
+  // Opciones de horas exactas para la agenda
+  const opcionesHoras = [
+    "08:00:00", "08:30:00", "09:00:00", "09:30:00", "10:00:00", "10:30:00",
+    "11:00:00", "11:30:00", "14:00:00", "14:30:00", "15:00:00", "15:30:00"
+  ];
 
   // FUNCIÓN PARA TRAER CITAS DE LA BD
   const cargarHistorialCitas = async (id) => {
@@ -68,29 +77,79 @@ export default function MisCitas() {
     }
   }, [navigate]);
 
-  // ESTADOS DEL MODAL DE RESERVAAAAAAAAA
+  // ESTADOS DEL MODAL DE RESERVA ACTUALIZADOS
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [nuevaCita, setNuevaCita] = useState({ 
     especialidad: 'Medicina General', 
+    idPersonal: '', // Almacenará el ID del médico seleccionado
     fecha: '', 
-    hora: '08:00:00', 
-    modalidad: 'Presencial'
+    hora: '', // Almacenará la hora exacta
+    modalidad: 'Presencial',
+    sede: 'Sede SJL'
   });
 
-  // ESTADOS DEL MODAL DE YAPE (NUEVO)
+  // EFECTO: Carga y filtra los médicos basándose en la columna 'especialidad' devuelta por el SP
+  useEffect(() => {
+    if (!isModalOpen) return;
+
+    const cargarMedicosPorEspecialidad = async () => {
+      try {
+        const response = await fetch('http://localhost:8080/api/medico/listar');
+        if (response.ok) {
+          const medicos = await response.json();
+          
+          const filtrados = medicos.filter(m => {
+            // Se sincroniza con el alias 'especialidad' retornado por sp_listar_personal
+            const espBD = (m.especialidad || m.ESPECIALIDAD || m.tipo_personal || m.TIPO_PERSONAL || '').toLowerCase();
+            const espForm = nuevaCita.especialidad.toLowerCase();
+            
+            // Función para omitir acentos/tildes en la comparación
+            const limpiarTildes = (str) => str.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+            
+            return limpiarTildes(espBD).includes(limpiarTildes(espForm));
+          });
+          
+          setMedicosFiltrados(filtrados);
+          
+          if (filtrados.length > 0) {
+            setNuevaCita(prev => ({ ...prev, idPersonal: filtrados[0].id_personal_salud || filtrados[0].ID_PERSONAL_SALUD }));
+          } else {
+            setNuevaCita(prev => ({ ...prev, idPersonal: '' }));
+          }
+        }
+      } catch (error) {
+        console.error("Error al traer médicos:", error);
+      }
+    };
+
+    cargarMedicosPorEspecialidad();
+  }, [nuevaCita.especialidad, isModalOpen]);
+
+  // ESTADOS DEL MODAL DE YAPE
   const [isYapeModalOpen, setIsYapeModalOpen] = useState(false);
   const [citaAPagar, setCitaAPagar] = useState(null);
 
-  // FUNCIÓN PARA RESERVAR
+  // FUNCIÓN PARA RESERVAR ACTUALIZADA
   const handleReservar = async (e) => {
     e.preventDefault();
     
+    if (!nuevaCita.idPersonal) {
+      alert("Por favor, selecciona un médico disponible.");
+      return;
+    }
+    if (!nuevaCita.hora) {
+      alert("Por favor, selecciona una hora para tu atención.");
+      return;
+    }
+
     const citaParaBD = {
       idPaciente: usuario.idPaciente, 
+      idPersonal: parseInt(nuevaCita.idPersonal), 
       fecha: nuevaCita.fecha,
-      hora: nuevaCita.hora,
-      modalidad: nuevaCita.modalidad,
-      especialidad: nuevaCita.especialidad
+      hora: nuevaCita.hora, 
+      modalidad: nuevaCita.modalidad, // Envía dinámicamente "Presencial" o "Virtual"
+      especialidad: nuevaCita.especialidad,
+      sede: nuevaCita.sede
     };
 
     try {
@@ -103,6 +162,7 @@ export default function MisCitas() {
       if (response.ok) {
         alert("¡Cita reservada con éxito en la base de datos!");
         setIsModalOpen(false);
+        setNuevaCita({ especialidad: 'Medicina General', idPersonal: '', fecha: '', hora: '', modalidad: 'Presencial', sede: 'Sede SJL' });
         cargarHistorialCitas(usuario.idPaciente); 
       } else {
         const errorMsg = await response.text();
@@ -113,7 +173,7 @@ export default function MisCitas() {
     }
   };
 
-  // FUNCIÓN PARA PAGAR CON YAPE (NUEVO)
+  // FUNCIÓN PARA PAGAR CON YAPE
   const handlePagoYape = async () => {
     if (!citaAPagar) return;
     
@@ -127,7 +187,7 @@ export default function MisCitas() {
       if (response.ok) {
         alert("¡Yapeo confirmado! Tu cita ha sido pagada.");
         setIsYapeModalOpen(false);
-        cargarHistorialCitas(usuario.idPaciente); // Recargamos para actualizar el estado a "Pagado"
+        cargarHistorialCitas(usuario.idPaciente); 
       } else {
         alert("Hubo un problema al procesar el pago.");
       }
@@ -150,14 +210,15 @@ export default function MisCitas() {
         </button>
       </div>
 
-      {/* --- AQUÍ ESTÁ LA CORRECCIÓN: Lógica para mostrar/ocultar tarjeta --- */}
       {citas.length > 0 ? (
         <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6 mb-8 border-l-4 border-l-yellow-500">
           <div className="flex justify-between items-start">
             <div>
               <p className="text-sm font-bold text-yellow-600 mb-1">CITA MÁS PRÓXIMA</p>
               <h3 className="text-2xl font-black text-gray-800">{citas[0].fecha || citas[0].FECHA}</h3>
-              <p className="text-gray-500 mt-2 font-medium">{citas[0].especialidad || citas[0].ESPECIALIDAD} - Por asignar</p>
+              <p className="text-gray-500 mt-2 font-medium">
+                {citas[0].especialidad || citas[0].ESPECIALIDAD} - {citas[0].medico || citas[0].MEDICO || 'Por asignar'}
+              </p>
             </div>
             <button 
               onClick={() => handleCancelar(citas[0].id_cita || citas[0].ID_CITA)}
@@ -195,22 +256,43 @@ export default function MisCitas() {
                 </td>
               </tr>
             ) : (
-              citas.map((cita, index) => (
-                <tr key={cita.id_cita || cita.ID_CITA || index} className="border-b border-gray-100 hover:bg-gray-50">
-                  <td className="px-6 py-4 font-medium">{cita.fecha || cita.FECHA}</td>
-                  <td className="px-6 py-4 font-medium">{cita.hora || cita.HORA}</td>
-                  <td className="px-6 py-4">{cita.especialidad || cita.ESPECIALIDAD}</td>
-                  <td className="px-6 py-4 text-gray-500">{cita.medico || cita.MEDICO || 'Por asignar'}</td>
-                  <td className="px-6 py-4">{cita.modalidad || cita.MODALIDAD}</td>
-                  <td className="px-6 py-4">
-                    <span className={`px-2 py-1 rounded-full text-xs font-bold ${
-                      (cita.estado || cita.ESTADO) === 'Pagado' ? 'bg-green-100 text-green-700' : 'bg-orange-100 text-orange-700'
-                    }`}>
-                      {cita.estado || cita.ESTADO || 'Pendiente'}
-                    </span>
-                  </td>
-                </tr>
-              ))
+              citas.map((cita, index) => {
+                const esVirtual = (cita.modalidad || cita.MODALIDAD) === 'Virtual';
+                const linkSala = cita.enlace || cita.ENLACE || cita.enlace_sesion || cita.ENLACE_SESION;
+
+                return (
+                  <tr key={cita.id_cita || cita.ID_CITA || index} className="border-b border-gray-100 hover:bg-gray-50">
+                    <td className="px-6 py-4 font-medium">{cita.fecha || cita.FECHA}</td>
+                    <td className="px-6 py-4 font-medium">{(cita.hora || cita.HORA)?.substring(0, 5)}</td>
+                    <td className="px-6 py-4">{cita.especialidad || cita.ESPECIALIDAD}</td>
+                    <td className="px-6 py-4 text-gray-500">{cita.medico || cita.MEDICO || 'Por asignar'}</td>
+                    <td className="px-6 py-4">
+                      <div className="flex flex-col items-start gap-1">
+                        <span>{cita.modalidad || cita.MODALIDAD}</span>
+                        {esVirtual && linkSala ? (
+                          <a 
+                            href={linkSala} 
+                            target="_blank" 
+                            rel="noopener noreferrer"
+                            className="px-2 py-0.5 bg-green-600 text-white text-[10px] font-black rounded hover:bg-green-700 shadow-sm animate-pulse"
+                          >
+                            🎥 Entrar a Sala
+                          </a>
+                        ) : esVirtual ? (
+                          <span className="text-[10px] text-gray-400 italic font-medium">Enlace pendiente</span>
+                        ) : null}
+                      </div>
+                    </td>
+                    <td className="px-6 py-4">
+                      <span className={`px-2 py-1 rounded-full text-xs font-bold ${
+                        (cita.estado || cita.ESTADO) === 'Pagado' ? 'bg-green-100 text-green-700' : 'bg-orange-100 text-orange-700'
+                      }`}>
+                        {cita.estado || cita.ESTADO || 'Pendiente'}
+                      </span>
+                    </td>
+                  </tr>
+                );
+              })
             )}
           </tbody>
         </table>
@@ -246,7 +328,6 @@ export default function MisCitas() {
     </div>
   );
 
-  // VISTA PAGOS CONECTADA A LA BD (NUEVO)
   const VistaPagos = () => {
     const citasPendientes = citas.filter(c => (c.estado || c.ESTADO) === 'Pendiente de Pago');
     const citasPagadas = citas.filter(c => (c.estado || c.ESTADO) === 'Pagado');
@@ -348,11 +429,6 @@ export default function MisCitas() {
             </p>
           </div>
         </div>
-        <div className="mt-8 pt-6 border-t border-gray-100 text-right">
-          <button className="px-5 py-2 bg-gray-100 text-gray-700 font-bold rounded-lg hover:bg-gray-200 transition-colors">
-            Editar Datos
-          </button>
-        </div>
       </div>
     </div>
   );
@@ -375,7 +451,7 @@ export default function MisCitas() {
   return (
     <div className="flex h-screen bg-gray-50 relative">
       
-      {/* MODAL DE RESERVA */}
+      {/* --- MODAL DE RESERVA CORREGIDO Y DINÁMICO --- */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-black/50 z-[100] flex items-center justify-center p-4 backdrop-blur-sm">
           <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl overflow-hidden animate-slide-up">
@@ -385,33 +461,84 @@ export default function MisCitas() {
             </div>
             
             <form onSubmit={handleReservar} className="p-8 space-y-4">
+              {/* 1. Selección de Especialidad */}
               <div>
                 <label className="block text-xs font-bold text-gray-700 mb-1">Especialidad</label>
                 <select 
-                  className="w-full border border-gray-300 rounded-lg p-2.5 outline-none focus:border-yellow-500"
+                  className="w-full border border-gray-300 rounded-lg p-2.5 outline-none focus:border-yellow-500 font-medium text-sm"
+                  value={nuevaCita.especialidad}
                   onChange={(e) => setNuevaCita({...nuevaCita, especialidad: e.target.value})}
                 >
-                  <option>Medicina General</option>
-                  <option>Cardiología</option>
-                  <option>Odontología</option>
-                  <option>Pediatría</option>
+                  <option value="Medicina General">Medicina General</option>
+                  <option value="Cardiología">Cardiología</option>
+                  <option value="Odontología">Odontología</option>
+                  <option value="Pediatría">Pediatría</option>
+                  <option value="Ginecología">Ginecología</option>
+                </select>
+              </div>
+
+              {/* 2. Selección de Médico Dinámico */}
+              <div>
+                <label className="block text-xs font-bold text-gray-700 mb-1">Selecciona tu Médico</label>
+                <select 
+                  required
+                  className="w-full border border-gray-300 rounded-lg p-2.5 outline-none focus:border-yellow-500 font-medium text-sm"
+                  value={nuevaCita.idPersonal}
+                  onChange={(e) => setNuevaCita({...nuevaCita, idPersonal: e.target.value})}
+                >
+                  {medicosFiltrados.length > 0 ? (
+                    medicosFiltrados.map((m) => {
+                      const nom = m.nombre || m.NOMBRE || '';
+                      const ape = m.apellido || m.APELLIDO || '';
+                      return (
+                        <option key={m.id_personal_salud || m.ID_PERSONAL_SALUD} value={m.id_personal_salud || m.ID_PERSONAL_SALUD}>
+                          {`Dr(a). ${nom} ${ape}`.trim()}
+                        </option>
+                      );
+                    })
+                  ) : (
+                    <option value="">⚠️ No hay médicos disponibles</option>
+                  )}
                 </select>
               </div>
               
+              {/* 3. Selección de Fecha */}
               <div>
                 <label className="block text-xs font-bold text-gray-700 mb-1">Fecha</label>
                 <input 
                   type="date" 
                   required 
-                  className="w-full border border-gray-300 rounded-lg p-2.5 outline-none focus:border-yellow-500"
+                  min={new Date().toISOString().split('T')[0]}
+                  className="w-full border border-gray-300 rounded-lg p-2.5 outline-none focus:border-yellow-500 font-medium text-sm"
+                  value={nuevaCita.fecha}
                   onChange={(e) => setNuevaCita({...nuevaCita, fecha: e.target.value})}
                 />
               </div>
 
+              {/* 4. Selector de Horas Exactas */}
+              <div>
+                <label className="block text-xs font-bold text-gray-700 mb-1">Hora de la Consulta</label>
+                <select 
+                  required
+                  className="w-full border border-gray-300 rounded-lg p-2.5 outline-none focus:border-yellow-500 font-medium text-sm"
+                  value={nuevaCita.hora}
+                  onChange={(e) => setNuevaCita({...nuevaCita, hora: e.target.value})}
+                >
+                  <option value="">-- Selecciona una hora --</option>
+                  {opcionesHoras.map((h) => (
+                    <option key={h} value={h}>
+                      {h.substring(0, 5)} {parseInt(h.substring(0,2)) < 12 ? 'AM' : 'PM'}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* 5. Selección de Modalidad */}
               <div>
                 <label className="block text-xs font-bold text-gray-700 mb-1">Modalidad</label>
                 <select 
-                  className="w-full border border-gray-300 rounded-lg p-2.5 outline-none focus:border-yellow-500"
+                  className="w-full border border-gray-300 rounded-lg p-2.5 outline-none focus:border-yellow-500 font-medium text-sm"
+                  value={nuevaCita.modalidad}
                   onChange={(e) => setNuevaCita({...nuevaCita, modalidad: e.target.value})}
                 >
                   <option value="Presencial">Presencial (En Clínica)</option>
@@ -419,17 +546,7 @@ export default function MisCitas() {
                 </select>
               </div>
 
-              <div>
-                <label className="block text-xs font-bold text-gray-700 mb-1">Turno</label>
-                <select 
-                  className="w-full border border-gray-300 rounded-lg p-2.5 outline-none focus:border-yellow-500"
-                  onChange={(e) => setNuevaCita({...nuevaCita, hora: e.target.value})}
-                >
-                  <option value="08:00:00">Mañana (08:00 AM - 12:00 PM)</option>
-                  <option value="14:00:00">Tarde (02:00 PM - 06:00 PM)</option>
-                </select>
-              </div>
-
+              {/* Botones de Control del Formulario */}
               <div className="flex gap-3 mt-6">
                 <button 
                   type="button" 
@@ -440,7 +557,8 @@ export default function MisCitas() {
                 </button>
                 <button 
                   type="submit" 
-                  className="flex-1 py-3 bg-yellow-500 text-white font-bold rounded-xl hover:bg-yellow-600 shadow-md transition-colors"
+                  disabled={!nuevaCita.idPersonal || !nuevaCita.hora}
+                  className="flex-1 py-3 bg-yellow-500 text-white font-bold rounded-xl hover:bg-yellow-600 shadow-md transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed"
                 >
                   Confirmar Cita
                 </button>
@@ -454,7 +572,7 @@ export default function MisCitas() {
       {isYapeModalOpen && (
         <div className="fixed inset-0 bg-black/60 z-[100] flex items-center justify-center p-4 backdrop-blur-sm">
           <div className="bg-white rounded-2xl w-full max-w-sm shadow-2xl overflow-hidden animate-slide-up text-center">
-            <div className="bg-[#7408B6] p-4 text-white">
+            <div className="bg-purple-700 p-4 text-white">
               <h3 className="text-xl font-bold">Pago con Yape</h3>
             </div>
             

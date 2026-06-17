@@ -46,12 +46,13 @@ export default function Login() {
         // 1. GUARDAMOS LOS DATOS EN LA MEMORIA
         localStorage.setItem('usuarioActual', JSON.stringify(data));
         
-        // 2. REDIRECCIÓN INTELIGENTE 
+        // 2. REDIRECCIÓN INTELIGENTE CORREGIDA
         const rolUsuario = data.rol ? data.rol.toLowerCase() : '';
 
         if (rolUsuario === 'admin') {
             navigate('/admin');
-        } else if (rolUsuario.includes('personal')) {
+        } else if (rolUsuario === 'medico' || rolUsuario.includes('personal')) { 
+            //  Ahora atrapa perfectamente tanto 'medico' como cualquier variante con 'personal'
             navigate('/medico');
         } else {
             navigate('/paciente');
@@ -107,7 +108,7 @@ export default function Login() {
       {/* LADO DERECHO: FORMULARIOS */}
       <div className="w-full md:w-1/2 flex flex-col justify-center px-8 sm:px-16 lg:px-32 relative">
         
-        {/* NUEVO: Botón de regresar al Home */}
+        {/* Botón de regresar al Home */}
         <div className="absolute top-8 left-8 sm:left-16 lg:left-32">
           <button 
             onClick={() => navigate('/')} 
@@ -124,7 +125,7 @@ export default function Login() {
             <button onClick={() => {setIsLogin(false); setMensajeError('');}} className={`w-1/2 pb-3 text-center text-sm font-bold ${!isLogin ? 'text-yellow-600 border-b-2 border-yellow-500' : 'text-gray-400'}`}>Registrarme</button>
           </div>
 
-          {/* Mensaje de error visual (WOW Factor) */}
+          {/* Mensaje de error visual */}
           {mensajeError && (
             <div className="mb-4 p-3 bg-red-50 border-l-4 border-red-500 text-red-700 text-sm font-medium animate-fade-in">
               {mensajeError}
