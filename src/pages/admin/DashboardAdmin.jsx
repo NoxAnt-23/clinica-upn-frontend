@@ -3,15 +3,17 @@ import { useNavigate } from 'react-router-dom';
 
 export default function DashboardAdmin() {
   const navigate = useNavigate();
-  const [vistaActual, setVistaActual] = useState('panel'); 
+  const [vistaActual, setVistaActual] = useState('panel');
 
   // --- ESTADOS PARA MODALES Y DATOS DINÁMICOS ---
   const [isModalPacienteOpen, setIsModalPacienteOpen] = useState(false);
   const [isModalPersonalOpen, setIsModalPersonalOpen] = useState(false);
-  
+
   // Estados para saber si estamos editando
   const [isEditandoMedico, setIsEditandoMedico] = useState(false);
   const [idMedicoEditar, setIdMedicoEditar] = useState(null);
+  const [isEditandoPaciente, setIsEditandoPaciente] = useState(false);
+  const [idPacienteEditar, setIdPacienteEditar] = useState(null);
 
   // Estados vacíos que se llenarán con la base de datos
   const [pacientes, setPacientes] = useState([]);
@@ -19,10 +21,10 @@ export default function DashboardAdmin() {
   const [citasTotales, setCitasTotales] = useState([]);
 
   const [nuevoPaciente, setNuevoPaciente] = useState({ dni: '', nombres: '', apellidos: '', telefono: '', correo: '' });
-  
-  const [nuevoMedico, setNuevoMedico] = useState({ 
-    medico: '', 
-    especialidad: 'Medicina General', 
+
+  const [nuevoMedico, setNuevoMedico] = useState({
+    medico: '',
+    especialidad: 'Medicina General',
     consultorio: '',
     correo: '',
     password: ''
@@ -64,29 +66,36 @@ export default function DashboardAdmin() {
   // --- HANDLERS PARA GUARDAR DATOS ---
   const handleGuardarPaciente = async (e) => {
     e.preventDefault();
+    const url = isEditandoPaciente
+      ? `http://localhost:8080/api/admin/pacientes/${idPacienteEditar}`
+      : 'http://localhost:8080/api/admin/pacientes';
+    const method = isEditandoPaciente ? 'PUT' : 'POST';
+
     try {
-      const res = await fetch('http://localhost:8080/api/admin/pacientes', {
-        method: 'POST',
+      const res = await fetch(url, {
+        method: method,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(nuevoPaciente)
       });
+
       if (res.ok) {
-        alert("¡Paciente registrado exitosamente!");
+        alert(`¡Paciente ${isEditandoPaciente ? 'actualizado' : 'registrado'} exitosamente!`);
         setIsModalPacienteOpen(false);
+        setIsEditandoPaciente(false);
+        setIdPacienteEditar(null);
         setNuevoPaciente({ dni: '', nombres: '', apellidos: '', telefono: '', correo: '' });
         cargarPacientes();
       } else {
-        alert("Error al registrar paciente.");
+        alert(`Error al ${isEditandoPaciente ? 'actualizar' : 'registrar'} paciente.`);
       }
     } catch (error) { alert("Error de conexión"); }
   };
-
   // Función inteligente: Crea o Actualiza dependiendo del estado
   const handleGuardarPersonal = async (e) => {
     e.preventDefault();
-    const url = isEditandoMedico 
-        ? `http://localhost:8080/api/admin/personal/${idMedicoEditar}` 
-        : 'http://localhost:8080/api/admin/personal';
+    const url = isEditandoMedico
+      ? `http://localhost:8080/api/admin/personal/${idMedicoEditar}`
+      : 'http://localhost:8080/api/admin/personal';
     const method = isEditandoMedico ? 'PUT' : 'POST';
 
     try {
@@ -95,7 +104,7 @@ export default function DashboardAdmin() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(nuevoMedico)
       });
-      
+
       if (res.ok) {
         alert(`¡Personal médico ${isEditandoMedico ? 'actualizado' : 'registrado'} exitosamente!`);
         cerrarModalPersonal();
@@ -109,7 +118,7 @@ export default function DashboardAdmin() {
   // --- HANDLERS DE EDICIÓN Y ELIMINACIÓN ---
   const handleEliminarPersonal = async (id) => {
     if (!window.confirm("¿Estás seguro de eliminar a este médico? Esta acción no se puede deshacer.")) return;
-    
+
     try {
       const res = await fetch(`http://localhost:8080/api/admin/personal/${id}`, {
         method: 'DELETE'
@@ -126,17 +135,44 @@ export default function DashboardAdmin() {
   const handleEditarPersonal = (medico) => {
     setIsEditandoMedico(true);
     setIdMedicoEditar(medico.id_personal_salud || medico.ID_PERSONAL_SALUD);
-    
+
     // Llenamos el formulario con los datos actuales del médico
     setNuevoMedico({
-      medico: `${medico.nombre || medico.NOMBRE} ${medico.apellido || medico.APELLIDO}`.trim(),
+      medico: medico.nombre || medico.NOMBRE || '',
       especialidad: medico.especialidad || medico.ESPECIALIDAD || 'Medicina General',
       consultorio: '',
       correo: medico.correo || '',
       password: '' // Se deja en blanco por seguridad
     });
-    
+
     setIsModalPersonalOpen(true);
+  };
+  const handleEliminarPaciente = async (id) => {
+    if (!window.confirm("¿Estás seguro de eliminar a este paciente? Se borrarán también sus citas asociadas.")) return;
+    try {
+      const res = await fetch(`http://localhost:8080/api/admin/pacientes/${id}`, { method: 'DELETE' });
+      if (res.ok) {
+        alert("Paciente eliminado correctamente");
+        cargarPacientes();
+      } else {
+        alert("Error al eliminar el paciente.");
+      }
+    } catch (error) { console.error("Error:", error); }
+  };
+
+  const handleEditarPaciente = (paciente) => {
+    setIsEditandoPaciente(true);
+    setIdPacienteEditar(paciente.id_paciente || paciente.ID_PACIENTE);
+
+    setNuevoPaciente({
+      dni: paciente.dni || paciente.DNI || '',
+      nombres: paciente.nombre || paciente.NOMBRE || '',
+      apellidos: paciente.apellido || paciente.APELLIDO || '',
+      telefono: paciente.celular || paciente.CELULAR || '',
+      correo: paciente.correo || paciente.CORREO || ''
+    });
+
+    setIsModalPacienteOpen(true);
   };
 
   const cerrarModalPersonal = () => {
@@ -180,7 +216,7 @@ export default function DashboardAdmin() {
     <div className="animate-fade-in bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
       <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center bg-gray-50">
         <h2 className="text-lg font-bold text-gray-800">Gestión de Pacientes</h2>
-        <button 
+        <button
           onClick={() => setIsModalPacienteOpen(true)}
           className="px-4 py-2 bg-yellow-500 text-white font-bold rounded-lg hover:bg-yellow-600 text-sm transition-all active:scale-95"
         >
@@ -209,8 +245,18 @@ export default function DashboardAdmin() {
                   <td className="px-6 py-4">{paciente.apellido || paciente.APELLIDO}</td>
                   <td className="px-6 py-4">{paciente.celular || paciente.CELULAR}</td>
                   <td className="px-6 py-4 text-right">
-                    <button className="text-blue-600 hover:underline font-bold text-xs mr-3">Editar</button>
-                    <button className="text-red-600 hover:underline font-bold text-xs">Eliminar</button>
+                    <button
+                      onClick={() => handleEditarPaciente(paciente)}
+                      className="text-blue-600 hover:underline font-bold text-xs mr-3"
+                    >
+                      Editar
+                    </button>
+                    <button
+                      onClick={() => handleEliminarPaciente(paciente.id_paciente || paciente.ID_PACIENTE)}
+                      className="text-red-600 hover:underline font-bold text-xs"
+                    >
+                      Eliminar
+                    </button>
                   </td>
                 </tr>
               ))
@@ -225,7 +271,7 @@ export default function DashboardAdmin() {
     <div className="animate-fade-in bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
       <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center bg-gray-50">
         <h2 className="text-lg font-bold text-gray-800">Personal Médico</h2>
-        <button 
+        <button
           onClick={() => {
             setIsEditandoMedico(false);
             setNuevoMedico({ medico: '', especialidad: 'Medicina General', consultorio: '', correo: '', password: '' });
@@ -241,7 +287,7 @@ export default function DashboardAdmin() {
           <thead>
             <tr className="bg-white text-xs uppercase tracking-wider text-gray-500 border-b border-gray-200">
               <th className="px-6 py-4 font-bold">ID</th>
-              <th className="px-6 py-4 font-bold">Médico</th>
+              <th className="px-6 py-4 font-bold">Médicoooooo</th>
               <th className="px-6 py-4 font-bold">Especialidad</th>
               <th className="px-6 py-4 font-bold text-right">Acciones</th>
             </tr>
@@ -256,13 +302,13 @@ export default function DashboardAdmin() {
                   <td className="px-6 py-4">{medico.nombre || medico.NOMBRE} {medico.apellido || medico.APELLIDO}</td>
                   <td className="px-6 py-4">{medico.especialidad || medico.ESPECIALIDAD}</td>
                   <td className="px-6 py-4 text-right">
-                    <button 
+                    <button
                       onClick={() => handleEditarPersonal(medico)}
                       className="text-blue-600 hover:underline font-bold text-xs mr-3"
                     >
                       Editar
                     </button>
-                    <button 
+                    <button
                       onClick={() => handleEliminarPersonal(medico.id_personal_salud || medico.ID_PERSONAL_SALUD)}
                       className="text-red-600 hover:underline font-bold text-xs"
                     >
@@ -305,9 +351,8 @@ export default function DashboardAdmin() {
                   <td className="px-6 py-4">{cita.modalidad || cita.MODALIDAD}</td>
                   <td className="px-6 py-4">{cita.especialidad || cita.ESPECIALIDAD}</td>
                   <td className="px-6 py-4">
-                    <span className={`px-2 py-1 rounded-full text-xs font-bold ${
-                      (cita.estado || cita.ESTADO) === 'Pagado' ? 'bg-green-100 text-green-700' : 'bg-orange-100 text-orange-700'
-                    }`}>
+                    <span className={`px-2 py-1 rounded-full text-xs font-bold ${(cita.estado || cita.ESTADO) === 'Pagado' ? 'bg-green-100 text-green-700' : 'bg-orange-100 text-orange-700'
+                      }`}>
                       {cita.estado || cita.ESTADO || 'Pendiente'}
                     </span>
                   </td>
@@ -332,7 +377,7 @@ export default function DashboardAdmin() {
 
   return (
     <div className="flex h-screen bg-gray-50 relative">
-      
+
       {/* --- MODAL: NUEVO PACIENTE --- */}
       {isModalPacienteOpen && (
         <div className="fixed inset-0 bg-black/50 z-[100] flex items-center justify-center p-4 backdrop-blur-sm">
@@ -343,58 +388,58 @@ export default function DashboardAdmin() {
             <form onSubmit={handleGuardarPaciente} className="p-8 space-y-4">
               <div>
                 <label className="block text-xs font-bold text-gray-700 mb-1">DNI</label>
-                <input 
+                <input
                   type="text" required maxLength="8"
                   className="w-full border border-gray-300 rounded-lg p-2.5 outline-none focus:border-yellow-500"
                   value={nuevoPaciente.dni}
-                  onChange={(e) => setNuevoPaciente({...nuevoPaciente, dni: e.target.value})}
+                  onChange={(e) => setNuevoPaciente({ ...nuevoPaciente, dni: e.target.value })}
                 />
               </div>
               <div>
                 <label className="block text-xs font-bold text-gray-700 mb-1">Nombres</label>
-                <input 
-                  type="text" required 
+                <input
+                  type="text" required
                   className="w-full border border-gray-300 rounded-lg p-2.5 outline-none focus:border-yellow-500"
                   value={nuevoPaciente.nombres}
-                  onChange={(e) => setNuevoPaciente({...nuevoPaciente, nombres: e.target.value})}
+                  onChange={(e) => setNuevoPaciente({ ...nuevoPaciente, nombres: e.target.value })}
                 />
               </div>
               <div>
                 <label className="block text-xs font-bold text-gray-700 mb-1">Apellidos</label>
-                <input 
-                  type="text" required 
+                <input
+                  type="text" required
                   className="w-full border border-gray-300 rounded-lg p-2.5 outline-none focus:border-yellow-500"
                   value={nuevoPaciente.apellidos}
-                  onChange={(e) => setNuevoPaciente({...nuevoPaciente, apellidos: e.target.value})}
+                  onChange={(e) => setNuevoPaciente({ ...nuevoPaciente, apellidos: e.target.value })}
                 />
               </div>
               <div>
                 <label className="block text-xs font-bold text-gray-700 mb-1">Teléfono / Celular</label>
-                <input 
+                <input
                   type="text" required maxLength="9"
                   className="w-full border border-gray-300 rounded-lg p-2.5 outline-none focus:border-yellow-500"
                   value={nuevoPaciente.telefono}
-                  onChange={(e) => setNuevoPaciente({...nuevoPaciente, telefono: e.target.value})}
+                  onChange={(e) => setNuevoPaciente({ ...nuevoPaciente, telefono: e.target.value })}
                 />
               </div>
               <div>
                 <label className="block text-xs font-bold text-gray-700 mb-1">Correo</label>
-                <input 
-                  type="email" required 
+                <input
+                  type="email" required
                   className="w-full border border-gray-300 rounded-lg p-2.5 outline-none focus:border-yellow-500"
                   value={nuevoPaciente.correo}
-                  onChange={(e) => setNuevoPaciente({...nuevoPaciente, correo: e.target.value})}
+                  onChange={(e) => setNuevoPaciente({ ...nuevoPaciente, correo: e.target.value })}
                 />
               </div>
               <div className="flex gap-3 mt-6">
-                <button 
+                <button
                   type="button" onClick={() => setIsModalPacienteOpen(false)}
                   className="flex-1 py-3 text-gray-500 font-bold hover:bg-gray-100 rounded-xl transition-colors"
                 >
                   Cancelar
                 </button>
-                <button 
-                  type="submit" 
+                <button
+                  type="submit"
                   className="flex-1 py-3 bg-yellow-500 text-white font-bold rounded-xl hover:bg-yellow-600 shadow-md transition-colors"
                 >
                   Guardar
@@ -417,19 +462,19 @@ export default function DashboardAdmin() {
             <form onSubmit={handleGuardarPersonal} className="p-8 space-y-4">
               <div>
                 <label className="block text-xs font-bold text-gray-700 mb-1">Nombres y Apellidos</label>
-                <input 
-                  type="text" required 
+                <input
+                  type="text" required
                   className="w-full border border-gray-300 rounded-lg p-2.5 outline-none focus:border-yellow-500"
                   value={nuevoMedico.medico}
-                  onChange={(e) => setNuevoMedico({...nuevoMedico, medico: e.target.value})}
+                  onChange={(e) => setNuevoMedico({ ...nuevoMedico, medico: e.target.value })}
                 />
               </div>
               <div>
                 <label className="block text-xs font-bold text-gray-700 mb-1">Especialidad</label>
-                <select 
+                <select
                   className="w-full border border-gray-300 rounded-lg p-2.5 outline-none focus:border-yellow-500"
                   value={nuevoMedico.especialidad}
-                  onChange={(e) => setNuevoMedico({...nuevoMedico, especialidad: e.target.value})}
+                  onChange={(e) => setNuevoMedico({ ...nuevoMedico, especialidad: e.target.value })}
                 >
                   <option>Medicina General</option>
                   <option>Cardiología</option>
@@ -444,38 +489,38 @@ export default function DashboardAdmin() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-xs font-bold text-gray-700 mb-1">Correo Electrónico</label>
-                    <input 
+                    <input
                       type="email" required placeholder="doctor@clinica.com"
                       className="w-full border border-gray-300 rounded-lg p-2.5 outline-none focus:border-yellow-500 bg-yellow-50"
                       value={nuevoMedico.correo}
-                      onChange={(e) => setNuevoMedico({...nuevoMedico, correo: e.target.value})}
+                      onChange={(e) => setNuevoMedico({ ...nuevoMedico, correo: e.target.value })}
                     />
                   </div>
                   <div>
                     <label className="block text-xs font-bold text-gray-700 mb-1">
                       {isEditandoMedico ? 'Nueva Contraseña' : 'Contraseña'}
                     </label>
-                    <input 
-                      type="text" 
+                    <input
+                      type="text"
                       required={!isEditandoMedico} // No obligar a cambiar clave si solo está editando nombre
                       placeholder={isEditandoMedico ? 'Dejar en blanco para no cambiar' : 'Asigna una clave'}
                       className="w-full border border-gray-300 rounded-lg p-2.5 outline-none focus:border-yellow-500 bg-yellow-50 text-xs"
                       value={nuevoMedico.password}
-                      onChange={(e) => setNuevoMedico({...nuevoMedico, password: e.target.value})}
+                      onChange={(e) => setNuevoMedico({ ...nuevoMedico, password: e.target.value })}
                     />
                   </div>
                 </div>
               </div>
 
               <div className="flex gap-3 mt-6">
-                <button 
+                <button
                   type="button" onClick={cerrarModalPersonal}
                   className="flex-1 py-3 text-gray-500 font-bold hover:bg-gray-100 rounded-xl transition-colors"
                 >
                   Cancelar
                 </button>
-                <button 
-                  type="submit" 
+                <button
+                  type="submit"
                   className="flex-1 py-3 bg-yellow-500 text-white font-bold rounded-xl hover:bg-yellow-600 shadow-md transition-colors"
                 >
                   {isEditandoMedico ? 'Actualizar' : 'Guardar'}
@@ -494,30 +539,30 @@ export default function DashboardAdmin() {
           </div>
           <span className="text-xl font-extrabold text-gray-800 tracking-tight">Clínica UPN</span>
         </div>
-        
+
         <nav className="flex-1 px-4 py-6 space-y-2 overflow-y-auto">
-          <button 
+          <button
             onClick={() => setVistaActual('panel')}
             className={`w-full flex items-center px-4 py-3 rounded-lg font-bold transition-colors ${vistaActual === 'panel' ? 'bg-yellow-50 text-yellow-700' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}
           >
             📊 Panel Principal
           </button>
-          
-          <button 
+
+          <button
             onClick={() => setVistaActual('pacientes')}
             className={`w-full flex items-center px-4 py-3 rounded-lg font-bold transition-colors ${vistaActual === 'pacientes' ? 'bg-yellow-50 text-yellow-700' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}
           >
             👥 Pacientes
           </button>
-          
-          <button 
+
+          <button
             onClick={() => setVistaActual('personal')}
             className={`w-full flex items-center px-4 py-3 rounded-lg font-bold transition-colors ${vistaActual === 'personal' ? 'bg-yellow-50 text-yellow-700' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}
           >
             👨‍⚕️ Personal Médico
           </button>
-          
-          <button 
+
+          <button
             onClick={() => setVistaActual('citas')}
             className={`w-full flex items-center px-4 py-3 rounded-lg font-bold transition-colors ${vistaActual === 'citas' ? 'bg-yellow-50 text-yellow-700' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}
           >
@@ -526,7 +571,7 @@ export default function DashboardAdmin() {
         </nav>
 
         <div className="p-4 border-t border-gray-200">
-          <button 
+          <button
             onClick={handleLogout}
             className="w-full flex items-center justify-center px-4 py-2 text-sm font-bold text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition-colors"
           >

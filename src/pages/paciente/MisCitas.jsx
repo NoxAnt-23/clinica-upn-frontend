@@ -5,7 +5,7 @@ export default function MisCitas() {
   const navigate = useNavigate();
   const [vistaActual, setVistaActual] = useState('citas');
   
-  // ESTADO DEL USUARIO
+  // ESTADO DEL USUARIOOOOOOOOOO
   const [usuario, setUsuario] = useState({
     idPaciente: null,
     nombre: '',
@@ -68,7 +68,7 @@ export default function MisCitas() {
     }
   }, [navigate]);
 
-  // ESTADOS DEL MODAL DE RESERVA
+  // ESTADOS DEL MODAL DE RESERVAAAAAAAAA
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [nuevaCita, setNuevaCita] = useState({ 
     especialidad: 'Medicina General', 
