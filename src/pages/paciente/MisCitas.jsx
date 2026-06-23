@@ -5,7 +5,7 @@ export default function MisCitas() {
   const navigate = useNavigate();
   const [vistaActual, setVistaActual] = useState('citas');
   
-  // ESTADO DEL USUARIO
+  // ESTADO DEL USUARIO CONFORME A TU LOCALSTORAGE
   const [usuario, setUsuario] = useState({
     idPaciente: null,
     nombre: '',
@@ -52,20 +52,22 @@ export default function MisCitas() {
     } catch (error) { alert("Error de conexión."); }
   };
 
-  // EFECTO: Se ejecuta al cargar la página
+  // EFECTO: Se ejecuta al cargar la página (Sincronizado con tu LocalStorage real)
   useEffect(() => {
     const datosGuardados = localStorage.getItem('usuarioActual');
     if (datosGuardados) {
       const data = JSON.parse(datosGuardados);
-      const idPac = data.id_paciente || data.ID_PACIENTE;
+      
+      // ✅ CORREGIDO: Extraemos 'idPaciente' que es el ID real de la tabla paciente devuelto por el LEFT JOIN
+      const idPac = data.idPaciente;
 
       setUsuario({
         idPaciente: idPac,
-        nombre: data.nombre || data.NOMBRE || 'Paciente',
-        apellido: data.apellido || data.APELLIDO || '',
-        dni: data.dni || data.DNI || 'No registrado',
-        correo: data.correo || data.CORREO || 'No registrado',
-        celular: data.celular || data.CELULAR || 'No registrado'
+        nombre: data.nombre || 'Paciente',
+        apellido: data.apellido || '',
+        dni: data.dni || 'No registrado',
+        correo: data.correo || 'No registrado',
+        celular: data.celular || 'No registrado'
       });
       
       if (idPac) {
@@ -81,9 +83,9 @@ export default function MisCitas() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [nuevaCita, setNuevaCita] = useState({ 
     especialidad: 'Medicina General', 
-    idPersonal: '', // Almacenará el ID del médico seleccionado
+    idPersonal: '', 
     fecha: '', 
-    hora: '', // Almacenará la hora exacta
+    hora: '', 
     modalidad: 'Presencial',
     sede: 'Sede SJL'
   });
@@ -99,14 +101,12 @@ export default function MisCitas() {
           const medicos = await response.json();
           
           const filtrados = medicos.filter(m => {
-            // Se sincroniza con el alias 'especialidad' retornado por sp_listar_personal
             const espBD = (m.especialidad || m.ESPECIALIDAD || m.tipo_personal || m.TIPO_PERSONAL || '').toLowerCase();
-            const espForm = nuevaCita.especialidad.toLowerCase();
+            const { especialidad: espForm } = nuevaCita;
             
-            // Función para omitir acentos/tildes en la comparación
             const limpiarTildes = (str) => str.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
             
-            return limpiarTildes(espBD).includes(limpiarTildes(espForm));
+            return limpiarTildes(espBD).includes(limpiarTildes(espForm.toLowerCase()));
           });
           
           setMedicosFiltrados(filtrados);
@@ -129,7 +129,7 @@ export default function MisCitas() {
   const [isYapeModalOpen, setIsYapeModalOpen] = useState(false);
   const [citaAPagar, setCitaAPagar] = useState(null);
 
-  // FUNCIÓN PARA RESERVAR ACTUALIZADA
+  // FUNCIÓN PARA RESERVAR CORREGIDA Y ALINEADA CON CAMELCASE DE SPRING BOOT
   const handleReservar = async (e) => {
     e.preventDefault();
     
@@ -142,13 +142,15 @@ export default function MisCitas() {
       return;
     }
 
+    // ✅ CORREGIDO: Nombres de atributos en camelCase para emparejarse con Cita.java/Jackson DTO
     const citaParaBD = {
       idPaciente: usuario.idPaciente, 
-      idPersonal: parseInt(nuevaCita.idPersonal), 
+      idPersonalSalud: parseInt(nuevaCita.idPersonal), 
       fecha: nuevaCita.fecha,
       hora: nuevaCita.hora, 
-      modalidad: nuevaCita.modalidad, // Envía dinámicamente "Presencial" o "Virtual"
+      modalidad: nuevaCita.modalidad, 
       especialidad: nuevaCita.especialidad,
+      estado: 'Pendiente de Pago', 
       sede: nuevaCita.sede
     };
 
@@ -451,7 +453,7 @@ export default function MisCitas() {
   return (
     <div className="flex h-screen bg-gray-50 relative">
       
-      {/* --- MODAL DE RESERVA CORREGIDO Y DINÁMICO --- */}
+      {/* --- MODAL DE RESERVA --- */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-black/50 z-[100] flex items-center justify-center p-4 backdrop-blur-sm">
           <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl overflow-hidden animate-slide-up">
