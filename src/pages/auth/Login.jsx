@@ -3,17 +3,22 @@ import { useNavigate } from 'react-router-dom';
 
 export default function Login() {
   const [isLogin, setIsLogin] = useState(true);
+  const [isOlvidePassword, setIsOlvidePassword] = useState(false); // 🆕 Estado para alternar a la vista de recuperación
   const navigate = useNavigate();
 
   // --- ESTADOS PARA MEJORAR LA EXPERIENCIA (UX) ---
   const [isLoading, setIsLoading] = useState(false);
   const [mensajeError, setMensajeError] = useState('');
+  const [mensajeExito, setMensajeExito] = useState(''); // 🆕 Estado para mensajes positivos
 
   // Estado para capturar los datos de inicio de sesión
   const [loginData, setLoginData] = useState({
     identificador: '',
     password: ''
   });
+
+  // Estado para capturar el correo de recuperación
+  const [correoRecuperacion, setCorreoRecuperacion] = useState(''); // 🆕
 
   // Estado unificado (Registro)
   const [formData, setFormData] = useState({
@@ -31,7 +36,7 @@ export default function Login() {
   const handleLogin = async (e) => {
     e.preventDefault();
     setIsLoading(true);
-    setMensajeError(''); // Limpiamos errores previos
+    setMensajeError(''); 
 
     try {
       const response = await fetch('http://localhost:8080/api/auth/login', {
@@ -42,17 +47,22 @@ export default function Login() {
 
       if (response.ok) {
         const data = await response.json(); 
-        
-        // 1. GUARDAMOS LOS DATOS EN LA MEMORIA
         localStorage.setItem('usuarioActual', JSON.stringify(data));
         
-        // 2. REDIRECCIÓN INTELIGENTE CORREGIDA
-        const rolUsuario = data.rol ? data.rol.toLowerCase() : '';
+        // INTERSECCIÓN DE SEGURIDAD PARA ROLES (Soporta data.role y data.rol por si acaso)
+        const rolCrudo = data.role || data.rol || '';
+        const rolUsuario = rolCrudo.toString().toLowerCase().trim();
+        
+        // 🆕 VALIDACIÓN DE PRIMER INGRESO (CONTRASEÑA TEMPORAL)
+        if (data.cambioPendiente === 1 || data.cambio_pendiente === 1) {
+            navigate('/cambiar-password-obligatorio');
+            return; // Cortamos el flujo aquí, no lo dejamos pasar a su dashboard
+        }
 
+        // Si no es su primer ingreso, pasa normal a sus vistas
         if (rolUsuario === 'admin') {
             navigate('/admin');
-        } else if (rolUsuario === 'medico' || rolUsuario.includes('personal')) { 
-            //  Ahora atrapa perfectamente tanto 'medico' como cualquier variante con 'personal'
+        } else if (rolUsuario === 'medico' || rolUsuario.includes('medico') || rolUsuario.includes('personal')) { 
             navigate('/medico');
         } else {
             navigate('/paciente');
@@ -92,6 +102,33 @@ export default function Login() {
     }
   };
 
+  // 🆕 FUNCIÓN PARA ENVIAR EL CORREO MEDIANTE EL BACKEND
+  const handleOlvidePassword = async (e) => {
+    e.preventDefault();
+    setIsLoading(true);
+    setMensajeError('');
+    setMensajeExito('');
+
+    try {
+      const response = await fetch('http://localhost:8080/api/auth/olvide-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ correo: correoRecuperacion })
+      });
+
+      if (response.ok) {
+        setMensajeExito("Si el correo es válido, recibirás un enlace de recuperación en unos instantes.");
+        setCorreoRecuperacion('');
+      } else {
+        setMensajeError("Hubo un problema al procesar la solicitud. Inténtalo de nuevo.");
+      }
+    } catch (error) {
+      setMensajeError("Error de conexión con el servidor.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   return (
     <div className="min-h-screen flex bg-[#fafafa]">
       
@@ -120,19 +157,63 @@ export default function Login() {
 
         <div className="w-full max-w-sm mx-auto mt-12">
           
-          <div className="flex border-b border-gray-200 mb-8">
-            <button onClick={() => {setIsLogin(true); setMensajeError('');}} className={`w-1/2 pb-3 text-center text-sm font-bold ${isLogin ? 'text-yellow-600 border-b-2 border-yellow-500' : 'text-gray-400'}`}>Ingresar</button>
-            <button onClick={() => {setIsLogin(false); setMensajeError('');}} className={`w-1/2 pb-3 text-center text-sm font-bold ${!isLogin ? 'text-yellow-600 border-b-2 border-yellow-500' : 'text-gray-400'}`}>Registrarme</button>
-          </div>
+          {/* Ocultamos las pestañas si estamos en modo recuperar contraseña */}
+          {!isOlvidePassword && (
+            <div className="flex border-b border-gray-200 mb-8">
+              <button onClick={() => {setIsLogin(true); setMensajeError(''); setMensajeExito('');}} className={`w-1/2 pb-3 text-center text-sm font-bold ${isLogin ? 'text-yellow-600 border-b-2 border-yellow-500' : 'text-gray-400'}`}>Ingresar</button>
+              <button onClick={() => {setIsLogin(false); setMensajeError(''); setMensajeExito('');}} className={`w-1/2 pb-3 text-center text-sm font-bold ${!isLogin ? 'text-yellow-600 border-b-2 border-yellow-500' : 'text-gray-400'}`}>Registrarme</button>
+            </div>
+          )}
 
-          {/* Mensaje de error visual */}
+          {/* Mensajes de error/éxito visuales */}
           {mensajeError && (
             <div className="mb-4 p-3 bg-red-50 border-l-4 border-red-500 text-red-700 text-sm font-medium animate-fade-in">
               {mensajeError}
             </div>
           )}
+          {mensajeExito && (
+            <div className="mb-4 p-3 bg-green-50 border-l-4 border-green-500 text-green-700 text-sm font-medium animate-fade-in">
+              {mensajeExito}
+            </div>
+          )}
 
-          {isLogin ? (
+          {/* CONTROL DE FLUJO TRIPLE: LOGUEAR, REGISTRAR O RECUPERAR */}
+          {isOlvidePassword ? (
+            /* 🆕 VISTA DE RECUPERACIÓN DE CONTRASEÑA */
+            <form onSubmit={handleOlvidePassword} className="space-y-5">
+              <div>
+                <h3 className="text-xl font-bold text-gray-800 mb-2">Recuperar Contraseña</h3>
+                <p className="text-xs text-gray-500 mb-4">Ingresa el correo electrónico asociado a tu cuenta y te enviaremos un enlace de recuperación seguro por Gmail.</p>
+                <label className="block text-xs font-bold text-gray-700 mb-1">Correo Electrónico</label>
+                <input 
+                    type="email" 
+                    placeholder="ejemplo@upn.pe" 
+                    value={correoRecuperacion}
+                    className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl focus:border-yellow-500 focus:ring-1 focus:ring-yellow-500 outline-none transition-all" 
+                    onChange={e => setCorreoRecuperacion(e.target.value)}
+                    required 
+                    disabled={isLoading}
+                />
+              </div>
+              
+              <button 
+                type="submit" 
+                disabled={isLoading}
+                className={`w-full text-white font-bold py-3 rounded-xl shadow-lg transition-all active:scale-[0.98] flex justify-center items-center ${isLoading ? 'bg-gray-400 cursor-not-allowed' : 'bg-yellow-500 hover:bg-yellow-600 shadow-yellow-500/30'}`}
+              >
+                {isLoading ? <span className="animate-pulse">Enviando correo...</span> : "Enviar Enlace"}
+              </button>
+
+              <button 
+                type="button"
+                onClick={() => {setIsOlvidePassword(false); setMensajeError(''); setMensajeExito('');}}
+                className="w-full text-center text-xs font-bold text-gray-400 hover:text-gray-600 transition-colors pt-2"
+              >
+                Volver al inicio de sesión
+              </button>
+            </form>
+          ) : isLogin ? (
+            /* FORMULARIO DE LOGIN NORMAL */
             <form onSubmit={handleLogin} className="space-y-5">
                 <div>
                   <label className="block text-xs font-bold text-gray-700 mb-1">Correo o Número de documento</label>
@@ -149,8 +230,13 @@ export default function Login() {
                 <div>
                   <div className="flex justify-between items-center mb-1">
                       <label className="block text-xs font-bold text-gray-700">Contraseña</label>
-                      <button type="button" className="text-[10px] font-bold text-yellow-600 hover:underline">
-                      ¿Olvidaste tu contraseña?
+                      {/* 🆕 Evento onClick añadido para activar la recuperación */}
+                      <button 
+                        type="button" 
+                        onClick={() => {setIsOlvidePassword(true); setMensajeError(''); setMensajeExito('');}}
+                        className="text-[10px] font-bold text-yellow-600 hover:underline"
+                      >
+                        ¿Olvidaste tu contraseña?
                       </button>
                   </div>
                   <input 
@@ -168,14 +254,11 @@ export default function Login() {
                   disabled={isLoading}
                   className={`w-full text-white font-bold py-3 rounded-xl shadow-lg transition-all active:scale-[0.98] flex justify-center items-center ${isLoading ? 'bg-gray-400 cursor-not-allowed' : 'bg-yellow-500 hover:bg-yellow-600 shadow-yellow-500/30'}`}
                 >
-                  {isLoading ? (
-                    <span className="animate-pulse">Procesando...</span>
-                  ) : (
-                    "Iniciar sesión"
-                  )}
+                  {isLoading ? <span className="animate-pulse">Procesando...</span> : "Iniciar sesión"}
                 </button>
             </form>
           ) : (
+            /* FORMULARIO DE REGISTRO */
             <form onSubmit={handleRegister} className="space-y-4">
                 <div className="grid grid-cols-2 gap-4">
                   <input placeholder="Nombre" className="p-3 bg-gray-50 border border-gray-200 rounded-xl focus:border-yellow-500 outline-none" onChange={e => setFormData({...formData, nombre: e.target.value})} required disabled={isLoading} />
@@ -193,11 +276,7 @@ export default function Login() {
                   disabled={isLoading}
                   className={`w-full mt-2 text-white font-bold py-3 rounded-xl shadow-lg transition-all active:scale-[0.98] flex justify-center items-center ${isLoading ? 'bg-gray-400 cursor-not-allowed' : 'bg-yellow-500 hover:bg-yellow-600 shadow-yellow-500/30'}`}
                 >
-                  {isLoading ? (
-                    <span className="animate-pulse">Guardando datos...</span>
-                  ) : (
-                    "Completar Registro"
-                  )}
+                  {isLoading ? <span className="animate-pulse">Guardando datos...</span> : "Completar Registro"}
                 </button>
             </form>
           )}

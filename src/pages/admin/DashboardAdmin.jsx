@@ -23,7 +23,8 @@ export default function DashboardAdmin() {
   const [nuevoPaciente, setNuevoPaciente] = useState({ dni: '', nombres: '', apellidos: '', telefono: '', correo: '' });
 
   const [nuevoMedico, setNuevoMedico] = useState({
-    medico: '',
+    nombre: '',
+    apellido: '',
     especialidad: 'Medicina General',
     consultorio: '',
     correo: '',
@@ -96,7 +97,7 @@ export default function DashboardAdmin() {
     e.preventDefault();
     const url = isEditandoMedico
       ? `http://localhost:8080/api/admin/personal/${idMedicoEditar}`
-      : 'http://localhost:8080/api/medico/registrar'; // Ruta corregida hacia tu MedicoController
+      : 'http://localhost:8080/api/admin/personal'; // Ruta corregida hacia tu MedicoController
     const method = isEditandoMedico ? 'PUT' : 'POST';
 
     try {
@@ -462,12 +463,23 @@ export default function DashboardAdmin() {
             </div>
             <form onSubmit={handleGuardarPersonal} className="p-8 space-y-4">
               <div>
-                <label className="block text-xs font-bold text-gray-700 mb-1">Nombres y Apellidos</label>
+                <label className="block text-xs font-bold text-gray-700 mb-1">Nombre</label>
                 <input
                   type="text" required
+                  placeholder="Ej. Karen"
                   className="w-full border border-gray-300 rounded-lg p-2.5 outline-none focus:border-yellow-500"
-                  value={nuevoMedico.medico}
-                  onChange={(e) => setNuevoMedico({ ...nuevoMedico, medico: e.target.value })}
+                  value={nuevoMedico.nombre}
+                  onChange={(e) => setNuevoMedico({ ...nuevoMedico, nombre: e.target.value })}
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-gray-700 mb-1">Apellido</label>
+                <input
+                  type="text" required
+                  placeholder="Ej. Torres"
+                  className="w-full border border-gray-300 rounded-lg p-2.5 outline-none focus:border-yellow-500"
+                  value={nuevoMedico.apellido}
+                  onChange={(e) => setNuevoMedico({ ...nuevoMedico, apellido: e.target.value })}
                 />
               </div>
               <div>
@@ -477,11 +489,12 @@ export default function DashboardAdmin() {
                   value={nuevoMedico.especialidad}
                   onChange={(e) => setNuevoMedico({ ...nuevoMedico, especialidad: e.target.value })}
                 >
+                  <option>Fisioterapia</option>
                   <option>Medicina General</option>
-                  <option>Cardiología</option>
-                  <option>Odontología</option>
-                  <option>Pediatría</option>
-                  <option>Ginecología</option>
+                  <option>Nutrición</option>
+                  <option>Obstetricia</option>
+                  <option>Psicología</option>
+                  <option>Rehabilitación</option>
                 </select>
               </div>
 
