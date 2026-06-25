@@ -4,7 +4,11 @@ import { useNavigate } from 'react-router-dom';
 export default function DashboardMedico() {
   const navigate = useNavigate();
   const [citas, setCitas] = useState([]);
-  const [medico, setMedico] = useState({ idPersonal: null, nombre: '...', especialidad: '...' });
+  const [medico, setMedico] = useState({ idPersonalSalud: null, nombre: '...', especialidad: '...' });
+  
+  // 🆕 NUEVO: Estado para alternar entre ver las citas de 'hoy' o 'todas'
+  const [filtro, setFiltro] = useState('hoy');
+  const [busqueda, setBusqueda] = useState('');
 
   // --- ESTADOS PARA EL MODAL DE TELECONSULTA ---
   const [isModalEnlaceOpen, setIsModalEnlaceOpen] = useState(false);
@@ -16,10 +20,10 @@ export default function DashboardMedico() {
     if (!datosGuardados) { navigate('/login'); return; }
     
     const data = JSON.parse(datosGuardados);
-    const idMed = data.id_personal_salud || data.ID_PERSONAL_SALUD;
+    const idMed = data.idPersonalSalud;
 
     setMedico({ 
-        idPersonal: idMed,
+        idPersonalSalud: idMed,
         nombre: data.nombre || data.NOMBRE || 'Dr(a).', 
         especialidad: data.especialidad || data.ESPECIALIDAD || 'General' 
     });
@@ -32,6 +36,7 @@ export default function DashboardMedico() {
       const response = await fetch(`http://localhost:8080/api/medico/citas/${idMedico}`);
       if (response.ok) {
         const data = await response.json();
+        console.log("CITAS RECIBIDAS DEL BACKEND:", data);
         setCitas(data);
       }
     } catch (error) { console.error("Error al cargar citas del médico:", error); }
@@ -41,7 +46,6 @@ export default function DashboardMedico() {
   const handleGuardarEnlace = async (e) => {
     e.preventDefault();
     try {
-      // Apunta directamente al endpoint PUT configurado en tu CitaController
       const response = await fetch(`http://localhost:8080/api/citas/enlace/${idCitaSeleccionada}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -52,7 +56,8 @@ export default function DashboardMedico() {
         alert("¡Enlace de teleconsulta guardado exitosamente!");
         setIsModalEnlaceOpen(false);
         setEnlaceInput('');
-        if (medico.idPersonal) cargarCitasMedico(medico.idPersonal); // Refresca la lista en tiempo real
+        // ✅ CORREGIDO: Apunta al estado real de tu objeto médico
+        if (medico.idPersonalSalud) cargarCitasMedico(medico.idPersonalSalud); 
       } else {
         alert("Error al guardar el enlace en el servidor.");
       }
@@ -60,6 +65,29 @@ export default function DashboardMedico() {
       alert("Error de conexión al guardar la teleconsulta.");
     }
   };
+
+  // 🆕 FILTRADO EN TIEMPO REAL EN EL FRONTEND
+  const hoyStr = new Date().toISOString().split('T')[0];
+
+  const citasFiltradas = citas.filter(c => {
+    // --- 1. Filtro por Fecha (Hoy vs Todas) ---
+    if (filtro === 'hoy') {
+      const fechaCita = c.fecha || c.FECHA || '';
+      if (fechaCita !== hoyStr) return false;
+    }
+
+    // --- 2. Filtro por Buscador (Paciente o DNI) ---
+    const textoBusqueda = busqueda.toLowerCase().trim();
+    if (textoBusqueda !== '') {
+      const nombrePaciente = (c.PACIENTE || c.paciente || '').toLowerCase();
+      const dniPaciente = (c.DNI || c.dni || '').toLowerCase(); // Mapea tu columna DNI de la BD si la incluyes en el SP
+      
+      // Si no contiene el nombre ni el DNI, se descarta de la lista
+      return nombrePaciente.includes(textoBusqueda) || dniPaciente.includes(textoBusqueda);
+    }
+
+    return true;
+  });
 
   return (
     <div className="flex min-h-screen bg-[#f4f7f6] relative">
@@ -143,13 +171,39 @@ export default function DashboardMedico() {
           </div>
         </header>
 
-        {/* CONTENEDOR DE AGENDA CON COLORES */}
+        {/* CONTENEDOR DE AGENDA CON FILTROS DINÁMICOS */}
         <div className="bg-white rounded-3xl border border-gray-200 shadow-lg shadow-gray-100 p-8">
-          <div className="flex justify-between items-center mb-8">
-            <h3 className="text-xl font-black text-gray-800">Citas para hoy ({new Date().toLocaleDateString()})</h3>
-            <span className="bg-yellow-500 text-white px-5 py-2 rounded-full text-xs font-black uppercase tracking-widest shadow-md shadow-yellow-500/20">
-              {citas.length} Registradas
+          
+          {/* 🆕 CABECERA CONFIGURADA CON PESTAÑAS INTERACTIVAS */}
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-8 pb-4 border-b border-gray-100 gap-4">
+            <div>
+              <h3 className="text-xl font-black text-gray-800">Control de Agenda Médica</h3>
+              <p className="text-xs text-gray-500 font-medium mt-0.5">Hoy es: {new Date().toLocaleDateString()}</p>
+            </div>
+            
+            {/* Swapper de Estados / Pestañas */}
+            <div className="flex bg-gray-100 p-1.5 rounded-xl shadow-inner w-max border border-gray-200">
+              <button onClick={() => setFiltro('hoy')} className={`px-4 py-2 text-xs font-black rounded-lg transition-all ${filtro === 'hoy' ? 'bg-white text-yellow-600 shadow-sm' : 'text-gray-500 hover:text-gray-800'}`}>📅 CITAS DE HOY</button>
+              <button onClick={() => setFiltro('todas')} className={`px-4 py-2 text-xs font-black rounded-lg transition-all ${filtro === 'todas' ? 'bg-white text-yellow-600 shadow-sm' : 'text-gray-500 hover:text-gray-800'}`}>📋 TODA LA AGENDA</button>
+            </div>
+
+            <span className="bg-yellow-500 text-white px-5 py-2 rounded-full text-xs font-black uppercase tracking-widest shadow-md shadow-yellow-500/20 w-max">
+              {citasFiltradas.length} En Pantalla
             </span>
+          </div>
+
+          {/* 🆕 NUEVO: CUADRO DE BÚSQUEDA INTELIGENTE */}
+          <div className="mb-6 max-w-md">
+            <div className="relative">
+              <span className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none text-gray-400">🔍</span>
+              <input
+                type="text"
+                placeholder="Buscar por nombre del paciente o DNI..."
+                className="w-full border border-gray-200 rounded-xl pl-10 pr-4 py-3 outline-none focus:border-yellow-500 bg-gray-50/50 text-sm font-medium shadow-inner transition-all"
+                value={busqueda}
+                onChange={(e) => setBusqueda(e.target.value)}
+              />
+            </div>
           </div>
 
           <table className="w-full text-left">
@@ -162,17 +216,28 @@ export default function DashboardMedico() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {citas.length > 0 ? citas.map((c, i) => {
+              {/* ✅ MAPEADO INTERACTIVO SOBRE LA LISTA FILTRADA */}
+              {citasFiltradas.length > 0 ? citasFiltradas.map((c, i) => {
                 const idCita = c.id_cita || c.ID_CITA || i;
                 const mod = c.modalidad || c.MODALIDAD || 'Presencial';
                 const est = c.estado || c.ESTADO || 'Pendiente';
-                
-                // Mapeo flexible blindado ante alias devueltos en mayúsculas por JDBC
                 const tieneEnlace = c.enlace || c.ENLACE || c.enlace_sesion || c.ENLACE_SESION;
 
                 return (
                   <tr key={idCita} className="group hover:bg-gray-50 transition-colors">
-                    <td className="py-6 font-black text-gray-700">{c.HORA || c.hora}</td>
+                    <td className="py-6 text-gray-700">
+                      <div className="flex flex-col">
+                        {/* Si está en "toda la agenda", pintamos la fecha arriba en chiquito */}
+                        {filtro === 'todas' && (
+                          <span className="text-[11px] font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-md w-max mb-1">
+                            {c.FECHA || c.fecha}
+                          </span>
+                        )}
+                        <span className="font-black text-sm text-gray-800">
+                          {c.HORA || c.hora}
+                        </span>
+                      </div>
+                    </td>
                     <td className="py-6 font-bold text-gray-900">{c.PACIENTE || c.paciente}</td>
                     <td className="py-6">
                       <div className="flex flex-col gap-1">
@@ -188,12 +253,10 @@ export default function DashboardMedico() {
                     </td>
                     <td className="py-6 text-right">
                       <div className="flex justify-end gap-2">
-                        {/* BOTÓN INTELIGENTE DE TELECONSULTA */}
                         {mod === 'Virtual' && (
                           <button 
                             onClick={() => {
                               setIdCitaSeleccionada(idCita);
-                              // Setea el link existente si lo encuentra, sino usa la plantilla de Jitsi
                               setEnlaceInput(tieneEnlace || `https://meet.jit.si/ClinicaUPN-Teleconsulta-Cita-${idCita}`);
                               setIsModalEnlaceOpen(true);
                             }}
@@ -215,7 +278,11 @@ export default function DashboardMedico() {
                   </tr>
                 );
               }) : (
-                <tr><td colSpan="4" className="py-12 text-center text-gray-400 font-bold">No hay citas pendientes por ahora.</td></tr>
+                <tr>
+                  <td colSpan="4" className="py-12 text-center text-gray-400 font-bold italic">
+                    No tienes citas registradas bajo este filtro.
+                  </td>
+                </tr>
               )}
             </tbody>
           </table>
