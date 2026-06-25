@@ -471,11 +471,11 @@ export default function MisCitas() {
                   value={nuevaCita.especialidad}
                   onChange={(e) => setNuevaCita({...nuevaCita, especialidad: e.target.value})}
                 >
+                  <option value="Fisioterapia">Fisioterapia</option>
                   <option value="Medicina General">Medicina General</option>
-                  <option value="Cardiología">Cardiología</option>
-                  <option value="Odontología">Odontología</option>
-                  <option value="Pediatría">Pediatría</option>
-                  <option value="Ginecología">Ginecología</option>
+                  <option value="Nutrición">Nutrición</option>
+                  <option value="Obstetricia">Obstetricia</option>
+                  <option value="Psicología">Psicología</option>
                 </select>
               </div>
 
