@@ -1,10 +1,12 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import jsPDF from 'jspdf';
+import 'jspdf-autotable';
 
 export default function MisCitas() {
   const navigate = useNavigate();
   const [vistaActual, setVistaActual] = useState('citas');
-  
+
   // ESTADO DEL USUARIO CONFORME A TU LOCALSTORAGE
   const [usuario, setUsuario] = useState({
     idPaciente: null,
@@ -57,7 +59,7 @@ export default function MisCitas() {
     const datosGuardados = localStorage.getItem('usuarioActual');
     if (datosGuardados) {
       const data = JSON.parse(datosGuardados);
-      
+
       // ✅ CORREGIDO: Extraemos 'idPaciente' que es el ID real de la tabla paciente devuelto por el LEFT JOIN
       const idPac = data.idPaciente;
 
@@ -69,11 +71,11 @@ export default function MisCitas() {
         correo: data.correo || 'No registrado',
         celular: data.celular || 'No registrado'
       });
-      
+
       if (idPac) {
         cargarHistorialCitas(idPac);
       }
-      
+
     } else {
       navigate('/login');
     }
@@ -81,11 +83,11 @@ export default function MisCitas() {
 
   // ESTADOS DEL MODAL DE RESERVA ACTUALIZADOS
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [nuevaCita, setNuevaCita] = useState({ 
-    especialidad: 'Medicina General', 
-    idPersonal: '', 
-    fecha: '', 
-    hora: '', 
+  const [nuevaCita, setNuevaCita] = useState({
+    especialidad: 'Medicina General',
+    idPersonal: '',
+    fecha: '',
+    hora: '',
     modalidad: 'Presencial',
     sede: 'Sede SJL'
   });
@@ -99,18 +101,18 @@ export default function MisCitas() {
         const response = await fetch('http://localhost:8080/api/medico/listar');
         if (response.ok) {
           const medicos = await response.json();
-          
+
           const filtrados = medicos.filter(m => {
             const espBD = (m.especialidad || m.ESPECIALIDAD || m.tipo_personal || m.TIPO_PERSONAL || '').toLowerCase();
             const { especialidad: espForm } = nuevaCita;
-            
+
             const limpiarTildes = (str) => str.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-            
+
             return limpiarTildes(espBD).includes(limpiarTildes(espForm.toLowerCase()));
           });
-          
+
           setMedicosFiltrados(filtrados);
-          
+
           if (filtrados.length > 0) {
             setNuevaCita(prev => ({ ...prev, idPersonal: filtrados[0].id_personal_salud || filtrados[0].ID_PERSONAL_SALUD }));
           } else {
@@ -132,7 +134,7 @@ export default function MisCitas() {
   // FUNCIÓN PARA RESERVAR CORREGIDA Y ALINEADA CON CAMELCASE DE SPRING BOOT
   const handleReservar = async (e) => {
     e.preventDefault();
-    
+
     if (!nuevaCita.idPersonal) {
       alert("Por favor, selecciona un médico disponible.");
       return;
@@ -144,13 +146,13 @@ export default function MisCitas() {
 
     // ✅ CORREGIDO: Nombres de atributos en camelCase para emparejarse con Cita.java/Jackson DTO
     const citaParaBD = {
-      idPaciente: usuario.idPaciente, 
-      idPersonalSalud: parseInt(nuevaCita.idPersonal), 
+      idPaciente: usuario.idPaciente,
+      idPersonalSalud: parseInt(nuevaCita.idPersonal),
       fecha: nuevaCita.fecha,
-      hora: nuevaCita.hora, 
-      modalidad: nuevaCita.modalidad, 
+      hora: nuevaCita.hora,
+      modalidad: nuevaCita.modalidad,
       especialidad: nuevaCita.especialidad,
-      estado: 'Pendiente de Pago', 
+      estado: 'Pendiente de Pago',
       sede: nuevaCita.sede
     };
 
@@ -165,7 +167,7 @@ export default function MisCitas() {
         alert("¡Cita reservada con éxito en la base de datos!");
         setIsModalOpen(false);
         setNuevaCita({ especialidad: 'Medicina General', idPersonal: '', fecha: '', hora: '', modalidad: 'Presencial', sede: 'Sede SJL' });
-        cargarHistorialCitas(usuario.idPaciente); 
+        cargarHistorialCitas(usuario.idPaciente);
       } else {
         const errorMsg = await response.text();
         alert("Error al guardar en base de datos:\n" + errorMsg);
@@ -178,10 +180,10 @@ export default function MisCitas() {
   // FUNCIÓN PARA PAGAR CON YAPE
   const handlePagoYape = async () => {
     if (!citaAPagar) return;
-    
+
     try {
-      const id = citaAPagar.id_cita || citaAPagar.ID_CITA; 
-      
+      const id = citaAPagar.id_cita || citaAPagar.ID_CITA;
+
       const response = await fetch(`http://localhost:8080/api/citas/pagar/${id}`, {
         method: 'PUT'
       });
@@ -189,7 +191,7 @@ export default function MisCitas() {
       if (response.ok) {
         alert("¡Yapeo confirmado! Tu cita ha sido pagada.");
         setIsYapeModalOpen(false);
-        cargarHistorialCitas(usuario.idPaciente); 
+        cargarHistorialCitas(usuario.idPaciente);
       } else {
         alert("Hubo un problema al procesar el pago.");
       }
@@ -204,7 +206,7 @@ export default function MisCitas() {
     <div className="animate-fade-in max-w-4xl mx-auto w-full">
       <div className="flex justify-between items-center mb-8">
         <h2 className="text-xl font-bold text-gray-800">Tus citas médicas</h2>
-        <button 
+        <button
           onClick={() => setIsModalOpen(true)}
           className="px-5 py-2.5 bg-yellow-500 text-white font-bold rounded-lg hover:bg-yellow-600 shadow-md transition-all active:scale-95"
         >
@@ -222,7 +224,7 @@ export default function MisCitas() {
                 {citas[0].especialidad || citas[0].ESPECIALIDAD} - {citas[0].medico || citas[0].MEDICO || 'Por asignar'}
               </p>
             </div>
-            <button 
+            <button
               onClick={() => handleCancelar(citas[0].id_cita || citas[0].ID_CITA)}
               className="text-xs font-bold text-red-500 hover:text-red-700 underline underline-offset-2"
             >
@@ -272,9 +274,9 @@ export default function MisCitas() {
                       <div className="flex flex-col items-start gap-1">
                         <span>{cita.modalidad || cita.MODALIDAD}</span>
                         {esVirtual && linkSala ? (
-                          <a 
-                            href={linkSala} 
-                            target="_blank" 
+                          <a
+                            href={linkSala}
+                            target="_blank"
                             rel="noopener noreferrer"
                             className="px-2 py-0.5 bg-green-600 text-white text-[10px] font-black rounded hover:bg-green-700 shadow-sm animate-pulse"
                           >
@@ -286,9 +288,8 @@ export default function MisCitas() {
                       </div>
                     </td>
                     <td className="px-6 py-4">
-                      <span className={`px-2 py-1 rounded-full text-xs font-bold ${
-                        (cita.estado || cita.ESTADO) === 'Pagado' ? 'bg-green-100 text-green-700' : 'bg-orange-100 text-orange-700'
-                      }`}>
+                      <span className={`px-2 py-1 rounded-full text-xs font-bold ${(cita.estado || cita.ESTADO) === 'Pagado' ? 'bg-green-100 text-green-700' : 'bg-orange-100 text-orange-700'
+                        }`}>
                         {cita.estado || cita.ESTADO || 'Pendiente'}
                       </span>
                     </td>
@@ -302,34 +303,110 @@ export default function MisCitas() {
     </div>
   );
 
-  const VistaResultados = () => (
-    <div className="animate-fade-in max-w-4xl mx-auto w-full">
-      <h2 className="text-xl font-bold text-gray-800 mb-6">Resultados Médicos</h2>
-      <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-        <table className="w-full text-left border-collapse">
-          <thead>
-            <tr className="bg-gray-50 text-xs uppercase tracking-wider text-gray-500 border-b border-gray-200">
-              <th className="px-6 py-4 font-bold">Fecha</th>
-              <th className="px-6 py-4 font-bold">Tipo de Examen</th>
-              <th className="px-6 py-4 font-bold">Laboratorio</th>
-              <th className="px-6 py-4 font-bold text-right">Acción</th>
-            </tr>
-          </thead>
-          <tbody className="text-sm text-gray-700">
-            <tr className="border-b border-gray-100 hover:bg-gray-50">
-              <td className="px-6 py-4">20 May 2026</td>
-              <td className="px-6 py-4 font-medium">Hemograma Completo</td>
-              <td className="px-6 py-4 text-gray-500">Sede Principal</td>
-              <td className="px-6 py-4 text-right">
-                <button className="text-blue-600 hover:underline font-bold text-xs">📄 Descargar PDF</button>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-    </div>
-  );
+  const VistaResultados = () => {
 
+    // 🆕 FUNCIÓN PARA GENERAR EL PDF
+    const generarRecetaPDF = (cita) => {
+      const doc = new jsPDF();
+
+      // 1. Diseño del Encabezado (Logo de la Clínica)
+      doc.setFillColor(234, 179, 8); // Color Amarillo (Yellow-500)
+      doc.rect(0, 0, 210, 30, 'F');
+
+      doc.setTextColor(255, 255, 255);
+      doc.setFontSize(22);
+      doc.setFont("helvetica", "bold");
+      doc.text("CLÍNICA UPN", 15, 20);
+
+      doc.setFontSize(10);
+      doc.text("Receta Médica Digital", 150, 20);
+
+      // 2. Datos del Paciente
+      doc.setTextColor(0, 0, 0);
+      doc.setFontSize(12);
+      doc.text("DATOS DEL PACIENTE:", 15, 45);
+      doc.setFont("helvetica", "normal");
+      doc.text(`Nombre: ${usuario.nombre} ${usuario.apellido}`, 15, 53);
+      doc.text(`DNI: ${usuario.dni}`, 15, 60);
+      doc.text(`Fecha de Atención: ${cita.fecha || cita.FECHA}`, 150, 53);
+
+      // 3. Datos del Médico
+      doc.setFont("helvetica", "bold");
+      doc.text("MÉDICO TRATANTE:", 15, 75);
+      doc.setFont("helvetica", "normal");
+      doc.text(`${cita.medico || cita.MEDICO}`, 15, 83);
+      doc.text(`Especialidad: ${cita.especialidad || cita.ESPECIALIDAD}`, 15, 90);
+
+      // 4. El Tratamiento / Receta (Simulado por ahora hasta que el doctor llene el reporte)
+      doc.line(15, 100, 195, 100); // Línea separadora
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(14);
+      doc.text("Rp.", 15, 115);
+
+      doc.setFontSize(12);
+      doc.setFont("helvetica", "normal");
+      // Aquí el doctor escribiría el tratamiento. Por ahora ponemos un texto de prueba
+      doc.text("1. Paracetamol 500mg - Tomar 1 pastilla cada 8 horas por 3 días.", 15, 125);
+      doc.text("2. Reposo absoluto y tomar abundante agua.", 15, 135);
+
+      // 5. Pie de página
+      doc.line(15, 270, 195, 270);
+      doc.setFontSize(9);
+      doc.text("Este documento es válido como receta médica oficial de la Clínica UPN.", 45, 280);
+
+      // 6. Descargar!
+      doc.save(`Receta_Medica_${usuario.nombre}_${cita.fecha || cita.FECHA}.pdf`);
+    };
+
+    // Filtramos solo las citas que ya pasaron (pagadas) para mostrar resultados
+    const citasAtendidas = citas.filter(c => (c.estado || c.ESTADO) === 'Pagado');
+
+    return (
+      <div className="animate-fade-in max-w-4xl mx-auto w-full">
+        <h2 className="text-xl font-bold text-gray-800 mb-6">Recetas y Resultados Médicos</h2>
+
+        <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden mb-8">
+          <div className="bg-gray-50 px-6 py-4 border-b border-gray-200">
+            <h3 className="font-bold text-gray-700">📑 Mis Recetas Médicas</h3>
+            <p className="text-xs text-gray-500">Descarga el tratamiento indicado por tu doctor.</p>
+          </div>
+
+          <table className="w-full text-left border-collapse">
+            <thead>
+              <tr className="bg-gray-50 text-xs uppercase tracking-wider text-gray-500 border-b border-gray-200">
+                <th className="px-6 py-4 font-bold">Fecha</th>
+                <th className="px-6 py-4 font-bold">Especialidad</th>
+                <th className="px-6 py-4 font-bold">Médico</th>
+                <th className="px-6 py-4 font-bold text-right">Acción</th>
+              </tr>
+            </thead>
+            <tbody className="text-sm text-gray-700">
+              {citasAtendidas.length === 0 ? (
+                <tr><td colSpan="4" className="px-6 py-8 text-center text-gray-500 font-medium">Aún no tienes atenciones médicas registradas.</td></tr>
+              ) : (
+                citasAtendidas.map((cita, index) => (
+                  <tr key={index} className="border-b border-gray-100 hover:bg-gray-50">
+                    <td className="px-6 py-4 font-medium">{cita.fecha || cita.FECHA}</td>
+                    <td className="px-6 py-4">{cita.especialidad || cita.ESPECIALIDAD}</td>
+                    <td className="px-6 py-4">{cita.medico || cita.MEDICO}</td>
+                    <td className="px-6 py-4 text-right">
+                      {/* 🆕 BOTÓN QUE DISPARA EL PDF */}
+                      <button
+                        onClick={() => generarRecetaPDF(cita)}
+                        className="px-3 py-1.5 bg-blue-50 text-blue-600 hover:bg-blue-600 hover:text-white rounded text-xs font-bold transition-colors shadow-sm flex items-center justify-end w-full"
+                      >
+                        📄 Descargar PDF
+                      </button>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    );
+  };
   const VistaPagos = () => {
     const citasPendientes = citas.filter(c => (c.estado || c.ESTADO) === 'Pendiente de Pago');
     const citasPagadas = citas.filter(c => (c.estado || c.ESTADO) === 'Pagado');
@@ -337,7 +414,7 @@ export default function MisCitas() {
     return (
       <div className="animate-fade-in max-w-4xl mx-auto w-full">
         <h2 className="text-xl font-bold text-gray-800 mb-6">Pagos y Facturación</h2>
-        
+
         {citasPendientes.length === 0 ? (
           <div className="bg-green-50 text-green-700 p-6 rounded-xl border border-green-200 mb-8 font-bold text-center">
             ¡Estás al día! No tienes pagos pendientes.
@@ -353,7 +430,7 @@ export default function MisCitas() {
                 <p className="text-2xl font-black text-red-700 mt-2">S/ 50.00</p>
               </div>
               <div className="flex gap-3">
-                <button 
+                <button
                   onClick={() => {
                     setCitaAPagar(cita);
                     setIsYapeModalOpen(true);
@@ -446,13 +523,13 @@ export default function MisCitas() {
   };
 
   const cerrarSesion = () => {
-    localStorage.removeItem('usuarioActual'); 
-    navigate('/login'); 
+    localStorage.removeItem('usuarioActual');
+    navigate('/login');
   };
 
   return (
     <div className="flex h-screen bg-gray-50 relative">
-      
+
       {/* --- MODAL DE RESERVA --- */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-black/50 z-[100] flex items-center justify-center p-4 backdrop-blur-sm">
@@ -461,15 +538,15 @@ export default function MisCitas() {
               <h3 className="text-xl font-bold">Nueva Cita Médica</h3>
               <p className="text-yellow-100 text-sm">Completa los datos para tu reserva</p>
             </div>
-            
+
             <form onSubmit={handleReservar} className="p-8 space-y-4">
               {/* 1. Selección de Especialidad */}
               <div>
                 <label className="block text-xs font-bold text-gray-700 mb-1">Especialidad</label>
-                <select 
+                <select
                   className="w-full border border-gray-300 rounded-lg p-2.5 outline-none focus:border-yellow-500 font-medium text-sm"
                   value={nuevaCita.especialidad}
-                  onChange={(e) => setNuevaCita({...nuevaCita, especialidad: e.target.value})}
+                  onChange={(e) => setNuevaCita({ ...nuevaCita, especialidad: e.target.value })}
                 >
                   <option value="Fisioterapia">Fisioterapia</option>
                   <option value="Medicina General">Medicina General</option>
@@ -482,11 +559,11 @@ export default function MisCitas() {
               {/* 2. Selección de Médico Dinámico */}
               <div>
                 <label className="block text-xs font-bold text-gray-700 mb-1">Selecciona tu Médico</label>
-                <select 
+                <select
                   required
                   className="w-full border border-gray-300 rounded-lg p-2.5 outline-none focus:border-yellow-500 font-medium text-sm"
                   value={nuevaCita.idPersonal}
-                  onChange={(e) => setNuevaCita({...nuevaCita, idPersonal: e.target.value})}
+                  onChange={(e) => setNuevaCita({ ...nuevaCita, idPersonal: e.target.value })}
                 >
                   {medicosFiltrados.length > 0 ? (
                     medicosFiltrados.map((m) => {
@@ -503,33 +580,33 @@ export default function MisCitas() {
                   )}
                 </select>
               </div>
-              
+
               {/* 3. Selección de Fecha */}
               <div>
                 <label className="block text-xs font-bold text-gray-700 mb-1">Fecha</label>
-                <input 
-                  type="date" 
-                  required 
+                <input
+                  type="date"
+                  required
                   min={new Date().toISOString().split('T')[0]}
                   className="w-full border border-gray-300 rounded-lg p-2.5 outline-none focus:border-yellow-500 font-medium text-sm"
                   value={nuevaCita.fecha}
-                  onChange={(e) => setNuevaCita({...nuevaCita, fecha: e.target.value})}
+                  onChange={(e) => setNuevaCita({ ...nuevaCita, fecha: e.target.value })}
                 />
               </div>
 
               {/* 4. Selector de Horas Exactas */}
               <div>
                 <label className="block text-xs font-bold text-gray-700 mb-1">Hora de la Consulta</label>
-                <select 
+                <select
                   required
                   className="w-full border border-gray-300 rounded-lg p-2.5 outline-none focus:border-yellow-500 font-medium text-sm"
                   value={nuevaCita.hora}
-                  onChange={(e) => setNuevaCita({...nuevaCita, hora: e.target.value})}
+                  onChange={(e) => setNuevaCita({ ...nuevaCita, hora: e.target.value })}
                 >
                   <option value="">-- Selecciona una hora --</option>
                   {opcionesHoras.map((h) => (
                     <option key={h} value={h}>
-                      {h.substring(0, 5)} {parseInt(h.substring(0,2)) < 12 ? 'AM' : 'PM'}
+                      {h.substring(0, 5)} {parseInt(h.substring(0, 2)) < 12 ? 'AM' : 'PM'}
                     </option>
                   ))}
                 </select>
@@ -538,10 +615,10 @@ export default function MisCitas() {
               {/* 5. Selección de Modalidad */}
               <div>
                 <label className="block text-xs font-bold text-gray-700 mb-1">Modalidad</label>
-                <select 
+                <select
                   className="w-full border border-gray-300 rounded-lg p-2.5 outline-none focus:border-yellow-500 font-medium text-sm"
                   value={nuevaCita.modalidad}
-                  onChange={(e) => setNuevaCita({...nuevaCita, modalidad: e.target.value})}
+                  onChange={(e) => setNuevaCita({ ...nuevaCita, modalidad: e.target.value })}
                 >
                   <option value="Presencial">Presencial (En Clínica)</option>
                   <option value="Virtual">Virtual (Teleconsulta)</option>
@@ -550,15 +627,15 @@ export default function MisCitas() {
 
               {/* Botones de Control del Formulario */}
               <div className="flex gap-3 mt-6">
-                <button 
-                  type="button" 
+                <button
+                  type="button"
                   onClick={() => setIsModalOpen(false)}
                   className="flex-1 py-3 text-gray-500 font-bold hover:bg-gray-100 rounded-xl transition-colors"
                 >
                   Cancelar
                 </button>
-                <button 
-                  type="submit" 
+                <button
+                  type="submit"
                   disabled={!nuevaCita.idPersonal || !nuevaCita.hora}
                   className="flex-1 py-3 bg-yellow-500 text-white font-bold rounded-xl hover:bg-yellow-600 shadow-md transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed"
                 >
@@ -577,22 +654,22 @@ export default function MisCitas() {
             <div className="bg-purple-700 p-4 text-white">
               <h3 className="text-xl font-bold">Pago con Yape</h3>
             </div>
-            
+
             <div className="p-8">
               <p className="text-gray-600 font-medium mb-4">Escanea el código QR para pagar tu consulta de <strong>S/ 50.00</strong></p>
-              
+
               <div className="bg-white p-2 border-4 border-[#7408B6] rounded-xl inline-block mb-6 shadow-lg">
                 <img src="https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=PagoClinicaUPN" alt="QR Yape" className="w-32 h-32" />
               </div>
-              
+
               <div className="flex flex-col gap-3">
-                <button 
+                <button
                   onClick={handlePagoYape}
                   className="w-full py-3 bg-[#7408B6] text-white font-bold rounded-xl hover:bg-[#5a068f] shadow-md transition-colors"
                 >
                   ¡Ya Yapeé! (Simular Pago)
                 </button>
-                <button 
+                <button
                   onClick={() => setIsYapeModalOpen(false)}
                   className="w-full py-3 text-gray-500 font-bold hover:bg-gray-100 rounded-xl transition-colors"
                 >
